@@ -6,9 +6,12 @@ const sg = sokol.gfx;
 const sapp = sokol.app;
 const sglue = sokol.glue;
 const simgui = sokol.imgui;
+const shader = @import("terrain.zig");
 
 const state = struct {
     var pass_action: sg.PassAction = .{};
+    var bind: sg.Bindings = .{};
+    var pip: sg.Pipeline = .{};
 };
 
 export fn init() void {
@@ -23,8 +26,31 @@ export fn init() void {
 
     state.pass_action.colors[0] = .{
         .load_action = .CLEAR,
-        .clear_value = .{ .r = 0.0, .g = 0.5, .b = 1.0, .a = 1.0 },
+        .clear_value = .{ .r = 0.0, .g = 0.0, .b = 0.0, .a = 1.0 },
     };
+
+    const vertices = [_]f32{
+        // position     color
+        0.0,  0.5,  0.5, 1.0, 0.0, 0.0, 1.0,
+        0.5,  -0.5, 0.5, 0.0, 1.0, 0.0, 1.0,
+        -0.5, -0.5, 0.5, 0.0, 0.0, 1.0, 1.0,
+    };
+    state.bind.vertex_buffers[0] = sg.makeBuffer(.{
+        .data = sg.asRange(&vertices),
+        .label = "vertex-buffer",
+    });
+
+    const shd = sg.makeShader(shader.terrainShaderDesc(sg.queryBackend()));
+    state.pip = sg.makePipeline(.{
+        .shader = shd,
+        .layout = init: {
+            var l = sg.VertexLayoutState{};
+            l.attrs[shader.ATTR_terrain_position].format = .FLOAT3;
+            l.attrs[shader.ATTR_terrain_color0].format = .FLOAT4;
+            break :init l;
+        },
+        .label = "shader-pipeline",
+    });
 }
 
 export fn frame() void {
@@ -52,6 +78,9 @@ export fn frame() void {
         .action = state.pass_action,
         .swapchain = sglue.swapchain(),
     });
+    sg.applyPipeline(state.pip);
+    sg.applyBindings(state.bind);
+    sg.draw(0, 3, 1);
     simgui.render();
     sg.endPass();
     sg.commit();
