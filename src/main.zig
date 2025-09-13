@@ -6,7 +6,7 @@ const sg = sokol.gfx;
 const sapp = sokol.app;
 const sglue = sokol.glue;
 const simgui = sokol.imgui;
-const shader = @import("terrain.zig");
+const shader = @import("shaders/terrain.zig");
 
 const state = struct {
     var pass_action: sg.PassAction = .{};

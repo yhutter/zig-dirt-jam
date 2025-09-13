@@ -5,6 +5,7 @@ const ResolvedTarget = Build.ResolvedTarget;
 const Dependency = Build.Dependency;
 const sokol = @import("sokol");
 const cimgui = @import("cimgui");
+const shdc = @import("shdc");
 
 pub fn build(b: *Build) !void {
     const target = b.standardTargetOptions(.{});
@@ -57,13 +58,31 @@ pub fn build(b: *Build) !void {
     }
 }
 
+fn buildShader(b: *Build) !*Build.Step {
+    const shaderDir = "src/shaders/";
+    return shdc.createSourceFile(b, .{
+        .shdc_dep = b.dependency("shdc", .{}),
+        .input = b.fmt("{s}terrain.glsl", .{shaderDir}),
+        .output = b.fmt("{s}terrain.zig", .{shaderDir}),
+        .slang = .{
+            .glsl430 = true,
+            .metal_macos = true,
+            .hlsl5 = true,
+        },
+        .reflection = true,
+    });
+}
+
 fn buildNative(b: *Build, mod: *Build.Module) !void {
+    const shaderStep = try buildShader(b);
+    const runStep = b.step("run", "Run App");
+    runStep.dependOn(shaderStep);
     const exe = b.addExecutable(.{
         .name = "zig-dirt-jam",
         .root_module = mod,
     });
     b.installArtifact(exe);
-    b.step("run", "Run App").dependOn(&b.addRunArtifact(exe).step);
+    runStep.dependOn(&b.addRunArtifact(exe).step);
 }
 
 const BuildWasmOptions = struct {
