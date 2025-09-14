@@ -7,10 +7,10 @@ Rewrite of my Acerola Dirt Jam entry in Zig and Sokol.
 Simply execute the following command:
 
 ```bash
-cd src
 zig build run
 ```
 
 ## Acknowledgments
 - [Sokol Zig Imgui Sample](https://github.com/floooh/sokol-zig-imgui-sample)
 - [Sokol Zig Examples](https://github.com/floooh/sokol-zig/tree/master)
+- [Sokol Zig Math Helper Library](https://github.com/floooh/sokol-zig/blob/master/examples/math.zig)
