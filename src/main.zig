@@ -7,8 +7,7 @@ const sapp = sokol.app;
 const sglue = sokol.glue;
 const simgui = sokol.imgui;
 const shader = @import("shaders/terrain.zig");
-const vec3 = @import("math.zig").Vec3;
-const mat4 = @import("math.zig").Mat4;
+const zm = @import("zmath");
 
 const Plane = struct {
     vertices: std.ArrayList(f32),
@@ -29,29 +28,25 @@ const state = struct {
     const roty = 0.0;
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var arena_allocator = std.heap.ArenaAllocator.init(gpa.allocator());
-    const view: mat4 = mat4.lookat(
-        .{
-            .x = 0.0,
-            .y = 2.0,
-            .z = 2.0,
-        },
-        vec3.zero(),
-        vec3.up(),
+    const view: zm.Mat = zm.lookAtLh(
+        zm.f32x4(0.0, 2.0, 1.0, 1.0), // eye position
+        zm.f32x4(0.0, 0.0, 0.0, 1.0), // focus point
+        zm.f32x4(0.0, 1.0, 0.0, 0.0), // up direction ('w' coord is zero because this is a vector not a point)
     );
 };
 
 fn computeVsParams() shader.VsParams {
     // Rotation matrix
-    const rxm = mat4.rotate(state.rotx, .{ .x = 1.0, .y = 0.0, .z = 0.0 });
-    const rym = mat4.rotate(state.roty, .{ .x = 0.0, .y = 1.0, .z = 0.0 });
+    const rxm = zm.rotationX(state.rotx);
+    const rym = zm.rotationY(state.roty);
 
     // Model Matrix
-    const model = mat4.mul(rxm, rym);
+    const model = zm.mul(rxm, rym);
     const aspect = sapp.widthf() / sapp.heightf();
     // Projection Matrix
-    const proj = mat4.persp(60.0, aspect, 0.01, 10.0);
+    const proj = zm.perspectiveFovLh(std.math.degreesToRadians(60.0), aspect, 0.01, 10.0);
     // Model View Projection Matrix
-    const mvp = mat4.mul(mat4.mul(proj, state.view), model);
+    const mvp = zm.mul(model, zm.mul(state.view, proj));
     return shader.VsParams{ .mvp = mvp };
 }
 

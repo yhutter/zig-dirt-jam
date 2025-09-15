@@ -1,6 +1,6 @@
 const sg = @import("sokol").gfx;
 const std = @import("std");
-const m = @import("../math.zig");
+const zm = @import("zmath");
 //
 //    #version:1# (machine generated, don't edit!)
 //
@@ -22,7 +22,7 @@ const m = @import("../math.zig");
 pub const ATTR_terrain_position = 0;
 pub const UB_vs_params = 0;
 pub const VsParams = extern struct {
-    mvp: m.Mat4 align(16),
+    mvp: zm.Mat align(16),
 };
 //
 //    #version 430

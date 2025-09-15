@@ -45,6 +45,9 @@ pub fn build(b: *Build) !void {
     mod_options.addOption(bool, "docking", opt_docking);
     mod_main.addOptions("build_options", mod_options);
 
+    const zmath = b.dependency("zmath", .{});
+    mod_main.addImport("zmath", zmath.module("root"));
+
     // from here on different handling for native vs wasm builds
     if (target.result.cpu.arch.isWasm()) {
         try buildWasm(b, .{

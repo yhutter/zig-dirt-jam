@@ -1,5 +1,5 @@
-@header const m = @import("../math.zig")
-@ctype mat4 m.Mat4
+@header const zm = @import("zmath")
+@ctype mat4 zm.Mat
 
 @vs vs
 layout(binding = 0) uniform vs_params {
