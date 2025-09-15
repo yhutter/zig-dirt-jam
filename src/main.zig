@@ -40,6 +40,21 @@ const state = struct {
     );
 };
 
+fn computeVsParams() shader.VsParams {
+    // Rotation matrix
+    const rxm = mat4.rotate(state.rotx, .{ .x = 1.0, .y = 0.0, .z = 0.0 });
+    const rym = mat4.rotate(state.roty, .{ .x = 0.0, .y = 1.0, .z = 0.0 });
+
+    // Model Matrix
+    const model = mat4.mul(rxm, rym);
+    const aspect = sapp.widthf() / sapp.heightf();
+    // Projection Matrix
+    const proj = mat4.persp(60.0, aspect, 0.01, 10.0);
+    // Model View Projection Matrix
+    const mvp = mat4.mul(mat4.mul(proj, state.view), model);
+    return shader.VsParams{ .mvp = mvp };
+}
+
 fn makePlane(division: usize, size: f32) !Plane {
     var plane: Plane = .{
         .vertices = .{},
@@ -164,14 +179,7 @@ export fn frame() void {
     }
     ig.igEnd();
 
-    // Rotation matrix
-    const rxm = mat4.rotate(state.rotx, .{ .x = 1.0, .y = 0.0, .z = 0.0 });
-    const rym = mat4.rotate(state.roty, .{ .x = 0.0, .y = 1.0, .z = 0.0 });
-    const model = mat4.mul(rxm, rym);
-    const aspect = sapp.widthf() / sapp.heightf();
-    const proj = mat4.persp(60.0, aspect, 0.01, 10.0);
-    const mvp = mat4.mul(mat4.mul(proj, state.view), model);
-    const vs_params = shader.VsParams{ .mvp = mvp };
+    const vs_params = computeVsParams();
 
     const num_indices: u32 = @intCast(state.plane.indices.items.len);
 
