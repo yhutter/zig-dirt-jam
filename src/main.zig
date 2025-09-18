@@ -33,6 +33,12 @@ const state = struct {
         zm.f32x4(0.0, 0.0, 0.0, 1.0), // focus point
         zm.f32x4(0.0, 1.0, 0.0, 0.0), // up direction ('w' coord is zero because this is a vector not a point)
     );
+    var base_color: [4]f32 = .{
+        @as(f32, 0xf2) / 255.0,
+        @as(f32, 0xa6) / 255.0,
+        @as(f32, 0x46) / 255.0,
+        @as(f32, 0xff) / 255.0,
+    };
 };
 
 fn computeVsParams() shader.VsParams {
@@ -47,7 +53,10 @@ fn computeVsParams() shader.VsParams {
     const proj = zm.perspectiveFovLh(std.math.degreesToRadians(60.0), aspect, 0.01, 10.0);
     // Model View Projection Matrix
     const mvp = zm.mul(model, zm.mul(state.view, proj));
-    return shader.VsParams{ .mvp = mvp };
+    return shader.VsParams{
+        .mvp = mvp,
+        .base_color = state.base_color,
+    };
 }
 
 fn makePlane(division: usize, size: f32) !Plane {
@@ -115,7 +124,7 @@ export fn init() void {
         .logger = .{ .func = slog.func },
     });
 
-    state.plane = makePlane(32, 1.0) catch unreachable;
+    state.plane = makePlane(16, 1.0) catch unreachable;
 
     // Initialize imgui
     simgui.setup(.{ .logger = .{ .func = slog.func } });
@@ -123,7 +132,12 @@ export fn init() void {
     // Setup render pass action
     state.pass_action.colors[0] = .{
         .load_action = .CLEAR,
-        .clear_value = .{ .r = 0.0, .g = 0.0, .b = 0.0, .a = 1.0 },
+        .clear_value = .{
+            .r = @as(f32, 0x21) / 255.0,
+            .g = @as(f32, 0x18) / 255.0,
+            .b = @as(f32, 0x15) / 255.0,
+            .a = 1.0,
+        },
     };
 
     state.bind.vertex_buffers[0] = sg.makeBuffer(.{
@@ -169,6 +183,11 @@ export fn frame() void {
         _ = ig.igColorEdit3(
             "Background",
             &state.pass_action.colors[0].clear_value.r,
+            ig.ImGuiColorEditFlags_None,
+        );
+        _ = ig.igColorEdit3(
+            "Base Color",
+            &state.base_color,
             ig.ImGuiColorEditFlags_None,
         );
     }
