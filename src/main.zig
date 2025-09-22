@@ -35,7 +35,8 @@ const State = struct {
     camera: Camera,
     rotation_x: f32,
     rotation_y: f32,
-    base_color: [4]f32,
+    base_color: [3]f32,
+    peak_color: [3]f32,
     noise_frequency: f32,
     noise_amplitude: f32,
 };
@@ -69,7 +70,11 @@ var state: State = .{
         @as(f32, 0xF2) / 255.0,
         @as(f32, 0xF4) / 255.0,
         @as(f32, 0xF8) / 255.0,
-        @as(f32, 0xff) / 255.0,
+    },
+    .peak_color = .{
+        @as(f32, 0xFF) / 255.0,
+        @as(f32, 0xFF) / 255.0,
+        @as(f32, 0xFF) / 255.0,
     },
     .noise_frequency = 1.0,
     .noise_amplitude = 1.0,
@@ -95,6 +100,7 @@ fn computeVsParams() shader.VsParams {
     return shader.VsParams{
         .mvp = mvp,
         .base_color = state.base_color,
+        .peak_color = state.peak_color,
         .noise_frequency = state.noise_frequency,
         .noise_amplitude = state.noise_amplitude,
     };
@@ -231,6 +237,11 @@ export fn frame() void {
         _ = ig.igColorEdit3(
             "Base Color",
             &state.base_color,
+            ig.ImGuiColorEditFlags_None,
+        );
+        _ = ig.igColorEdit3(
+            "Peak Color",
+            &state.peak_color,
             ig.ImGuiColorEditFlags_None,
         );
         _ = ig.igSliderFloat("Noise Frequency", &state.noise_frequency, 0.0, 5.0);

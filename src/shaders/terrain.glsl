@@ -84,7 +84,8 @@ float snoise(vec2 v) {
 @include_block noise_functions
 
 layout(binding = 0) uniform vs_params {
-    vec4 base_color;
+    vec3 base_color;
+    vec3 peak_color;
     float noise_frequency;
     float noise_amplitude;
     mat4 mvp;
@@ -96,7 +97,12 @@ void main() {
     float displacement = snoise(position.xz * noise_frequency) * noise_amplitude;
     vec4 displaced_position = vec4(position.x, position.y + displacement, position.z, position.w);
     gl_Position = mvp * displaced_position;
-    color = base_color;
+
+    vec3 mix_color = vec3(0.0);
+    // Simplex noise returns value between -1 and 1 remap to 0 and 1
+    float mix_value = (displacement * 0.5) + 0.5;
+    mix_color = mix(base_color, peak_color, mix_value);
+    color = vec4(mix_color, 1.0);
 }
 @end
 
