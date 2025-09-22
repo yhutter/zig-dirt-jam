@@ -76,6 +76,17 @@ float snoise(vec2 v) {
     g.yz = a0.yz * vec2(x1.x,x2.x) + h.yz * vec2(x1.y,x2.y);
     return 130.0 * dot(m, g);
 }
+
+// Normal calculation based on center difference method: https://iquilezles.org/articles/terrainmarching/
+vec3 normal_snoise(vec3 p, float step_size) {
+    return normalize(
+        vec3(
+            snoise(vec2(p.x - step_size, p.z)) - snoise(vec2(p.x + step_size, p.z)),
+            2.0f * step_size,
+            snoise(vec2(p.x, p.z - step_size)) - snoise(vec2(p.x, p.z + step_size))
+        )
+    );
+}
 @end
 
 
@@ -88,10 +99,16 @@ layout(binding = 0) uniform vs_params {
     vec3 peak_color;
     float noise_frequency;
     float noise_amplitude;
+    float normal_step_size;
+    mat4 model_matrix;
     mat4 mvp;
+    vec3 camera_position;
 };
-in vec4 position;
+layout(location = 0) in vec4 position;
 out vec4 color;
+out vec3 normal;
+out vec3 position_world;
+out vec3 camera;
 
 void main() {
     float displacement = snoise(position.xz * noise_frequency) * noise_amplitude;
@@ -103,16 +120,53 @@ void main() {
     float mix_value = (displacement * 0.5) + 0.5;
     mix_color = mix(base_color, peak_color, mix_value);
     color = vec4(mix_color, 1.0);
+
+    vec3 calculated_normal = vec3(0.0);
+    calculated_normal = normal_snoise(position.xyz, normal_step_size);
+    normal = (model_matrix * vec4(calculated_normal, 0.0f)).xyz;
+
+    position_world = (model_matrix * displaced_position).xyz;
+    camera = camera_position;
 }
 @end
 
 
 @fs fs
 in vec4 color;
+in vec3 normal;
+in vec3 position_world;
+in vec3 camera;
 out vec4 frag_color;
 
 void main() {
-    frag_color = color;
+    vec3 normalized_normal = normalize(normal);
+    vec3 view_direction = normalize(camera - position_world);
+
+    vec3 base_colour = color.rgb;
+    vec3 lighting = vec3(0.0f);
+
+    // Ambient
+    vec3 ambient = vec3(0.5);
+
+    // Diffuse
+    vec3 light_dir = normalize(vec3(1.0, 1.0, 1.0));
+    vec3 light_color = vec3(1.0, 1.0, 1.0);
+    float dp = max(0.0, dot(light_dir, normalized_normal));
+
+    // Cell Shading
+    dp *= smoothstep(0.5, 0.505, dp);
+
+    vec3 diffuse = dp * light_color;
+
+    // Lighting is sum of all lighting sources.
+    lighting = diffuse * 0.8;
+
+    vec3 colour = base_colour * lighting;
+
+    // Appromixation of converting from linear to srgb color space.
+    colour = pow(colour, vec3(1.0 / 2.2));
+
+    frag_color = vec4(colour, 1.0f);
 }
 @end
 

@@ -13,6 +13,7 @@ const Plane = struct {
     vertices: std.ArrayList(f32),
     indices: std.ArrayList(u32),
     size: f32,
+    position: zm.Vec,
 };
 
 const Camera = struct {
@@ -39,6 +40,7 @@ const State = struct {
     peak_color: [3]f32,
     noise_frequency: f32,
     noise_amplitude: f32,
+    normal_step_size: f32,
 };
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -52,6 +54,7 @@ var state: State = .{
         .vertices = .{},
         .indices = .{},
         .size = 1.0,
+        .position = zm.f32x4s(1.0),
     },
     .camera = .{
         .position = zm.f32x4(0.0, 0.0, 2.0, 1.0),
@@ -77,16 +80,19 @@ var state: State = .{
         @as(f32, 0xFF) / 255.0,
     },
     .noise_frequency = 1.0,
-    .noise_amplitude = 1.0,
+    .noise_amplitude = 0.28,
+    .normal_step_size = 0.0001,
 };
 
 fn computeVsParams() shader.VsParams {
     // Rotation matrix
-    const rxm = zm.rotationX(state.rotation_x);
+    // const rxm = zm.rotationX(state.rotation_x);
+    const dt: f32 = @floatCast(sapp.frameDuration());
+    state.rotation_y += 0.5 * dt;
     const rym = zm.rotationY(state.rotation_y);
 
     // Model Matrix
-    const model = zm.mul(rxm, rym);
+    const model = zm.mul(rym, zm.translationV(state.plane.position));
     const aspect = sapp.widthf() / sapp.heightf();
 
     // Projection Matrix
@@ -95,14 +101,23 @@ fn computeVsParams() shader.VsParams {
     // View Matrix
     const view = zm.lookAtLh(state.camera.position, state.camera.position + state.camera.front, state.camera.up);
 
+    const camera_position: [3]f32 = .{
+        state.camera.position[0],
+        state.camera.position[1],
+        state.camera.position[2],
+    };
+
     // Model View Projection Matrix
     const mvp = zm.mul(model, zm.mul(view, proj));
     return shader.VsParams{
         .mvp = mvp,
+        .model_matrix = model,
+        .normal_step_size = state.normal_step_size,
         .base_color = state.base_color,
         .peak_color = state.peak_color,
         .noise_frequency = state.noise_frequency,
         .noise_amplitude = state.noise_amplitude,
+        .camera_position = camera_position,
     };
 }
 
@@ -111,6 +126,7 @@ fn makePlane(division: usize, size: f32) !Plane {
         .vertices = .{},
         .indices = .{},
         .size = size,
+        .position = zm.f32x4s(0.0),
     };
     const allocator = arena.allocator();
     const num_vertices = (division + 1) * (division + 1);
@@ -246,6 +262,7 @@ export fn frame() void {
         );
         _ = ig.igSliderFloat("Noise Frequency", &state.noise_frequency, 0.0, 5.0);
         _ = ig.igSliderFloat("Noise Amplitude", &state.noise_amplitude, 0.0, 5.0);
+        _ = ig.igSliderFloatEx("Normal Step Size", &state.normal_step_size, 0.0, 1.0, "%.6f", ig.ImGuiSliderFlags_None);
     }
     ig.igEnd();
 
@@ -300,7 +317,7 @@ export fn event(ev: [*c]const sapp.Event) void {
         const y = std.math.sin(std.math.degreesToRadians(state.camera.pitch));
         const z = std.math.sin(std.math.degreesToRadians(state.camera.yaw)) * std.math.cos(std.math.degreesToRadians(state.camera.pitch));
         const direction = zm.f32x4(x, y, z, 0.0);
-        state.camera.front = direction;
+        state.camera.front = zm.normalize3(direction);
     }
 
     if (e.type == .KEY_UP) {
