@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const ig = @import("cimgui");
 const sokol = @import("sokol");
 const slog = sokol.log;
@@ -44,7 +45,11 @@ const State = struct {
 };
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-var arena = std.heap.ArenaAllocator.init(gpa.allocator());
+const allocator = switch (builtin.target.os.tag) {
+    .emscripten => std.heap.wasm_allocator,
+    else => gpa.allocator(),
+};
+var arena = std.heap.ArenaAllocator.init(allocator);
 
 var state: State = .{
     .pass_action = .{},
@@ -128,9 +133,9 @@ fn makePlane(division: usize, size: f32) !Plane {
         .size = size,
         .position = zm.f32x4s(0.0),
     };
-    const allocator = arena.allocator();
+    const arena_allocator = arena.allocator();
     const num_vertices = (division + 1) * (division + 1);
-    try plane.vertices.ensureTotalCapacity(allocator, num_vertices * 3);
+    try plane.vertices.ensureTotalCapacity(arena_allocator, num_vertices * 3);
 
     const division_f: f32 = @floatFromInt(division);
     const triangle_side = size / division_f;
@@ -142,15 +147,15 @@ fn makePlane(division: usize, size: f32) !Plane {
             const x: f32 = col_f * triangle_side;
             const y = 0.0;
             const z = row_f * triangle_side;
-            try plane.vertices.append(allocator, x - center);
-            try plane.vertices.append(allocator, y);
-            try plane.vertices.append(allocator, z - center);
+            try plane.vertices.append(arena_allocator, x - center);
+            try plane.vertices.append(arena_allocator, y);
+            try plane.vertices.append(arena_allocator, z - center);
         }
     }
 
     // Construct indices
     const num_indices = division * division * 2 * 3;
-    try plane.indices.ensureTotalCapacity(allocator, num_indices);
+    try plane.indices.ensureTotalCapacity(arena_allocator, num_indices);
 
     for (0..division) |row| {
         for (0..division) |col| {
@@ -161,9 +166,9 @@ fn makePlane(division: usize, size: f32) !Plane {
             const index0: u32 = @intCast(row * (division + 1) + col);
             const index1: u32 = @intCast(index0 + (division + 1) + 1);
             const index2: u32 = @intCast(index0 + (division + 1));
-            try plane.indices.append(allocator, index0);
-            try plane.indices.append(allocator, index1);
-            try plane.indices.append(allocator, index2);
+            try plane.indices.append(arena_allocator, index0);
+            try plane.indices.append(arena_allocator, index1);
+            try plane.indices.append(arena_allocator, index2);
 
             // Bottom triangle
             //             /|
@@ -171,9 +176,9 @@ fn makePlane(division: usize, size: f32) !Plane {
             // index0 -> /__|
             const index3: u32 = @intCast(index0 + 1);
             const index4: u32 = @intCast(index0 + (division + 1) + 1);
-            try plane.indices.append(allocator, index0);
-            try plane.indices.append(allocator, index3);
-            try plane.indices.append(allocator, index4);
+            try plane.indices.append(arena_allocator, index0);
+            try plane.indices.append(arena_allocator, index3);
+            try plane.indices.append(arena_allocator, index4);
         }
     }
 

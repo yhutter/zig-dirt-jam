@@ -69,6 +69,7 @@ fn buildShader(b: *Build) !*Build.Step {
         .output = b.fmt("{s}terrain.zig", .{shaderDir}),
         .slang = .{
             .glsl430 = true,
+            .glsl300es = true,
             .metal_macos = true,
             .hlsl5 = true,
         },
@@ -77,13 +78,13 @@ fn buildShader(b: *Build) !*Build.Step {
 }
 
 fn buildNative(b: *Build, mod: *Build.Module) !void {
-    const shaderStep = try buildShader(b);
     const runStep = b.step("run", "Run App");
-    runStep.dependOn(shaderStep);
+    const shaderStep = try buildShader(b);
     const exe = b.addExecutable(.{
         .name = "zig-dirt-jam",
         .root_module = mod,
     });
+    exe.step.dependOn(shaderStep);
     b.installArtifact(exe);
     runStep.dependOn(&b.addRunArtifact(exe).step);
 }
@@ -133,6 +134,8 @@ fn buildWasm(b: *Build, opts: BuildWasmOptions) !void {
     b.getInstallStep().dependOn(&link_step.step);
     // ...and a special run step to start the web build output via 'emrun'
     const run = sokol.emRunStep(b, .{ .name = "zig-dirt-jam", .emsdk = dep_emsdk });
+    const shaderStep = try buildShader(b);
+    run.step.dependOn(shaderStep);
     run.step.dependOn(&link_step.step);
     b.step("run", "Run App").dependOn(&run.step);
 }
