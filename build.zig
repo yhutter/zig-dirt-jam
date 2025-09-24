@@ -23,7 +23,15 @@ pub fn build(b: *Build) !void {
         .optimize = optimize,
         .with_sokol_imgui = true,
     });
+
+    const dep_shdc = dep_sokol.builder.dependency("shdc", .{});
+
     const dep_cimgui = b.dependency("cimgui", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const dep_zmath = b.dependency("zmath", .{
         .target = target,
         .optimize = optimize,
     });
@@ -31,22 +39,38 @@ pub fn build(b: *Build) !void {
     // inject the cimgui header search path into the sokol C library compile step
     dep_sokol.artifact("sokol_clib").addIncludePath(dep_cimgui.path(cimgui_conf.include_dir));
 
+    const mod_sokol = dep_sokol.module("sokol");
+    const mod_cimgui = dep_cimgui.module(cimgui_conf.module_name);
+    const mod_zmath = dep_zmath.module("root");
+    const mod_shaders = try sokol.shdc.createModule(b, "shader", mod_sokol, .{
+        .shdc_dep = dep_shdc,
+        .input = "src/shaders/terrain.glsl",
+        .output = "shader.zig",
+        .slang = .{
+            .glsl410 = true,
+            .hlsl4 = true,
+            .metal_macos = true,
+            .glsl300es = true,
+        },
+    });
+
+    mod_shaders.addImport("zmath", mod_zmath);
+
     // main module with sokol and cimgui imports
     const mod_main = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
         .imports = &.{
-            .{ .name = "sokol", .module = dep_sokol.module("sokol") },
-            .{ .name = cimgui_conf.module_name, .module = dep_cimgui.module(cimgui_conf.module_name) },
+            .{ .name = "sokol", .module = mod_sokol },
+            .{ .name = cimgui_conf.module_name, .module = mod_cimgui },
+            .{ .name = "shader", .module = mod_shaders },
+            .{ .name = "zmath", .module = mod_zmath },
         },
     });
     const mod_options = b.addOptions();
     mod_options.addOption(bool, "docking", opt_docking);
     mod_main.addOptions("build_options", mod_options);
-
-    const zmath = b.dependency("zmath", .{});
-    mod_main.addImport("zmath", zmath.module("root"));
 
     // from here on different handling for native vs wasm builds
     if (target.result.cpu.arch.isWasm()) {
@@ -61,30 +85,12 @@ pub fn build(b: *Build) !void {
     }
 }
 
-fn buildShader(b: *Build) !*Build.Step {
-    const shaderDir = "src/shaders/";
-    return shdc.createSourceFile(b, .{
-        .shdc_dep = b.dependency("shdc", .{}),
-        .input = b.fmt("{s}terrain.glsl", .{shaderDir}),
-        .output = b.fmt("{s}terrain.zig", .{shaderDir}),
-        .slang = .{
-            .glsl430 = true,
-            .glsl300es = true,
-            .metal_macos = true,
-            .hlsl5 = true,
-        },
-        .reflection = true,
-    });
-}
-
 fn buildNative(b: *Build, mod: *Build.Module) !void {
     const runStep = b.step("run", "Run App");
-    const shaderStep = try buildShader(b);
     const exe = b.addExecutable(.{
         .name = "zig-dirt-jam",
         .root_module = mod,
     });
-    exe.step.dependOn(shaderStep);
     b.installArtifact(exe);
     runStep.dependOn(&b.addRunArtifact(exe).step);
 }
@@ -134,8 +140,6 @@ fn buildWasm(b: *Build, opts: BuildWasmOptions) !void {
     b.getInstallStep().dependOn(&link_step.step);
     // ...and a special run step to start the web build output via 'emrun'
     const run = sokol.emRunStep(b, .{ .name = "zig-dirt-jam", .emsdk = dep_emsdk });
-    const shaderStep = try buildShader(b);
-    run.step.dependOn(shaderStep);
     run.step.dependOn(&link_step.step);
     b.step("run", "Run App").dependOn(&run.step);
 }

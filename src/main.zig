@@ -7,8 +7,8 @@ const sg = sokol.gfx;
 const sapp = sokol.app;
 const sglue = sokol.glue;
 const simgui = sokol.imgui;
-const shader = @import("shaders/terrain.zig");
 const zm = @import("zmath");
+const shd = @import("shader");
 
 const Plane = struct {
     vertices: std.ArrayList(f32),
@@ -45,11 +45,10 @@ const State = struct {
 };
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-const allocator = switch (builtin.target.os.tag) {
-    .emscripten => std.heap.wasm_allocator,
+var default_allocator = switch (builtin.target.os.tag) {
+    .emscripten => std.heap.c_allocator,
     else => gpa.allocator(),
 };
-var arena = std.heap.ArenaAllocator.init(allocator);
 
 var state: State = .{
     .pass_action = .{},
@@ -89,7 +88,7 @@ var state: State = .{
     .normal_step_size = 0.0001,
 };
 
-fn computeVsParams() shader.VsParams {
+fn computeVsParams() shd.VsParams {
     // Rotation matrix
     // const rxm = zm.rotationX(state.rotation_x);
     const dt: f32 = @floatCast(sapp.frameDuration());
@@ -114,7 +113,7 @@ fn computeVsParams() shader.VsParams {
 
     // Model View Projection Matrix
     const mvp = zm.mul(model, zm.mul(view, proj));
-    return shader.VsParams{
+    return shd.VsParams{
         .mvp = mvp,
         .model_matrix = model,
         .normal_step_size = state.normal_step_size,
@@ -126,16 +125,15 @@ fn computeVsParams() shader.VsParams {
     };
 }
 
-fn makePlane(division: usize, size: f32) !Plane {
+fn makePlane(division: usize, size: f32, allocator: std.mem.Allocator) !Plane {
     var plane: Plane = .{
         .vertices = .{},
         .indices = .{},
         .size = size,
         .position = zm.f32x4s(0.0),
     };
-    const arena_allocator = arena.allocator();
     const num_vertices = (division + 1) * (division + 1);
-    try plane.vertices.ensureTotalCapacity(arena_allocator, num_vertices * 3);
+    try plane.vertices.ensureTotalCapacity(allocator, num_vertices * 3);
 
     const division_f: f32 = @floatFromInt(division);
     const triangle_side = size / division_f;
@@ -147,15 +145,15 @@ fn makePlane(division: usize, size: f32) !Plane {
             const x: f32 = col_f * triangle_side;
             const y = 0.0;
             const z = row_f * triangle_side;
-            try plane.vertices.append(arena_allocator, x - center);
-            try plane.vertices.append(arena_allocator, y);
-            try plane.vertices.append(arena_allocator, z - center);
+            try plane.vertices.append(allocator, x - center);
+            try plane.vertices.append(allocator, y);
+            try plane.vertices.append(allocator, z - center);
         }
     }
 
     // Construct indices
     const num_indices = division * division * 2 * 3;
-    try plane.indices.ensureTotalCapacity(arena_allocator, num_indices);
+    try plane.indices.ensureTotalCapacity(allocator, num_indices);
 
     for (0..division) |row| {
         for (0..division) |col| {
@@ -166,9 +164,9 @@ fn makePlane(division: usize, size: f32) !Plane {
             const index0: u32 = @intCast(row * (division + 1) + col);
             const index1: u32 = @intCast(index0 + (division + 1) + 1);
             const index2: u32 = @intCast(index0 + (division + 1));
-            try plane.indices.append(arena_allocator, index0);
-            try plane.indices.append(arena_allocator, index1);
-            try plane.indices.append(arena_allocator, index2);
+            try plane.indices.append(allocator, index0);
+            try plane.indices.append(allocator, index1);
+            try plane.indices.append(allocator, index2);
 
             // Bottom triangle
             //             /|
@@ -176,9 +174,9 @@ fn makePlane(division: usize, size: f32) !Plane {
             // index0 -> /__|
             const index3: u32 = @intCast(index0 + 1);
             const index4: u32 = @intCast(index0 + (division + 1) + 1);
-            try plane.indices.append(arena_allocator, index0);
-            try plane.indices.append(arena_allocator, index3);
-            try plane.indices.append(arena_allocator, index4);
+            try plane.indices.append(allocator, index0);
+            try plane.indices.append(allocator, index3);
+            try plane.indices.append(allocator, index4);
         }
     }
 
@@ -192,7 +190,7 @@ export fn init() void {
         .logger = .{ .func = slog.func },
     });
 
-    state.plane = makePlane(64, 1.0) catch unreachable;
+    state.plane = makePlane(64, 1.0, default_allocator) catch unreachable;
 
     // Initialize imgui
     simgui.setup(.{ .logger = .{ .func = slog.func } });
@@ -219,16 +217,16 @@ export fn init() void {
         .label = "terrain-indices",
     });
 
-    const shd = sg.makeShader(shader.terrainShaderDesc(sg.queryBackend()));
+    const shader = sg.makeShader(shd.terrainShaderDesc(sg.queryBackend()));
     state.pip = sg.makePipeline(.{
-        .shader = shd,
+        .shader = shader,
         .index_type = .UINT32,
         .primitive_type = .TRIANGLES,
         .cull_mode = .NONE,
         .depth = .{ .compare = .LESS_EQUAL, .write_enabled = true },
         .layout = init: {
             var l = sg.VertexLayoutState{};
-            l.attrs[shader.ATTR_terrain_position].format = .FLOAT3;
+            l.attrs[shd.ATTR_terrain_position].format = .FLOAT3;
             break :init l;
         },
         .label = "terrain-pipeline",
@@ -286,7 +284,7 @@ export fn frame() void {
     });
     sg.applyPipeline(state.pip);
     sg.applyBindings(state.bind);
-    sg.applyUniforms(shader.UB_vs_params, sg.asRange(&vs_params));
+    sg.applyUniforms(shd.UB_vs_params, sg.asRange(&vs_params));
     sg.draw(0, num_indices, 1);
     simgui.render();
     sg.endPass();
@@ -294,8 +292,12 @@ export fn frame() void {
 }
 
 export fn cleanup() void {
-    arena.deinit();
-    _ = gpa.deinit();
+    state.plane.vertices.deinit(default_allocator);
+    state.plane.indices.deinit(default_allocator);
+    const result = gpa.deinit();
+    if (result == .leak) {
+        std.debug.print("Memory Leak detected!\n", .{});
+    }
     simgui.shutdown();
     sg.shutdown();
 }
