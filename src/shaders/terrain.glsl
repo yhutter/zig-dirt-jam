@@ -77,7 +77,32 @@ float snoise(vec2 v) {
     return 130.0 * dot(m, g);
 }
 
+// Taken from https://thebookofshaders.com/13/
+float turbulence(vec2 x, float hurst_exponent, int num_octaves) {
+    float g = exp2(-hurst_exponent);
+    float f = 1.0f;
+    float a = 1.0f;
+    float t = 0.0f;
+    for (int i = 0; i < num_octaves; i++) {
+        t += a * abs(snoise(f * x));
+        f *= 2.0;
+        a *= g;
+    }
+    return t;
+}
+
 // Normal calculation based on center difference method: https://iquilezles.org/articles/terrainmarching/
+
+vec3 normal_turbulence(vec3 p, float hurst_exponent, int num_octaves, float step_size) {
+    return normalize(
+        vec3(
+            turbulence(vec2(p.x - step_size, p.z), hurst_exponent, num_octaves) - turbulence(vec2(p.x + step_size, p.z), hurst_exponent, num_octaves),
+            2.0f * step_size,
+            turbulence(vec2(p.x, p.z - step_size), hurst_exponent, num_octaves) - turbulence(vec2(p.x, p.z + step_size), hurst_exponent, num_octaves)
+        )
+    );
+}
+
 vec3 normal_snoise(vec3 p, float step_size) {
     return normalize(
         vec3(
@@ -94,16 +119,24 @@ vec3 normal_snoise(vec3 p, float step_size) {
 @vs vs
 @include_block noise_functions
 
+#define NOISE_FUNC_TYPE_SIMPLEX 0
+#define NOISE_FUNC_TYPE_TURBULENCE 1
+
 layout(binding = 0) uniform vs_params {
     vec3 base_color;
     vec3 peak_color;
+    float peak_color_threshold;
     float noise_frequency;
     float noise_amplitude;
+    int noise_function;
+    int num_octaves;
+    float hurst_exponent;
     float normal_step_size;
     mat4 model_matrix;
     mat4 mvp;
     vec3 camera_position;
 };
+
 layout(location = 0) in vec4 position;
 out vec4 color;
 out vec3 normal;
@@ -111,18 +144,33 @@ out vec3 position_world;
 out vec3 camera;
 
 void main() {
-    float displacement = snoise(position.xz * noise_frequency) * noise_amplitude;
+    float displacement = 0.0;
+    vec3 calculated_normal = vec3(0.0);
+    float mix_value = 0.0;
+    vec3 mix_color = vec3(0.0f);
+
+    switch (noise_function) {
+        case NOISE_FUNC_TYPE_SIMPLEX:
+            displacement = snoise(position.xz * noise_frequency);
+            calculated_normal = normal_snoise(position.xyz, normal_step_size);
+            mix_value = displacement;
+            // Simplex noise returns value between -1 and 1 remap to 0 and 1
+            mix_value = (displacement * 0.5) + 0.5;
+            mix_color = mix(base_color, peak_color, mix_value);
+            break;
+        case NOISE_FUNC_TYPE_TURBULENCE:
+            displacement = turbulence(position.xz * noise_frequency, hurst_exponent, num_octaves);
+            calculated_normal = normal_turbulence(position.xyz, hurst_exponent, num_octaves, normal_step_size);
+            mix_value = displacement;
+            mix_color = mix(base_color, peak_color, smoothstep(mix_value, -peak_color_threshold, peak_color_threshold));
+            break;
+    }
+    displacement *= noise_amplitude;
     vec4 displaced_position = vec4(position.x, position.y + displacement, position.z, position.w);
     gl_Position = mvp * displaced_position;
 
-    vec3 mix_color = vec3(0.0);
-    // Simplex noise returns value between -1 and 1 remap to 0 and 1
-    float mix_value = (displacement * 0.5) + 0.5;
-    mix_color = mix(base_color, peak_color, mix_value);
     color = vec4(mix_color, 1.0);
 
-    vec3 calculated_normal = vec3(0.0);
-    calculated_normal = normal_snoise(position.xyz, normal_step_size);
     normal = (model_matrix * vec4(calculated_normal, 0.0f)).xyz;
 
     position_world = (model_matrix * displaced_position).xyz;
@@ -150,13 +198,14 @@ void main() {
 
     // Diffuse
     vec3 light_dir = normalize(vec3(1.0, 1.0, 1.0));
-    vec3 light_color = vec3(1.0, 1.0, 1.0);
+    vec3 light_color = vec3(1.0, 1.0, 0.9);
     float dp = max(0.0, dot(light_dir, normalized_normal));
 
     // Cell Shading
     dp *= smoothstep(0.5, 0.505, dp);
 
     vec3 diffuse = dp * light_color;
+    // vec3 diffuse = light_color;
 
     // Lighting is sum of all lighting sources.
     lighting = diffuse * 0.8;

@@ -28,6 +28,11 @@ const Camera = struct {
     pitch: f32,
 };
 
+const NoiseFunction = enum(usize) {
+    Simplex,
+    Turbulence,
+};
+
 const State = struct {
     pass_action: sg.PassAction,
     bind: sg.Bindings,
@@ -39,9 +44,13 @@ const State = struct {
     rotation_y: f32,
     base_color: [3]f32,
     peak_color: [3]f32,
+    peak_color_threshold: f32,
     noise_frequency: f32,
     noise_amplitude: f32,
     normal_step_size: f32,
+    noise_function: NoiseFunction,
+    num_octaves: c_int,
+    hurst_exponent: f32,
 };
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -65,7 +74,7 @@ var state: State = .{
         .target_position = zm.f32x4(0.0, 0.0, 2.0, 1.0),
         .up = zm.f32x4(0.0, 1.0, 0.0, 0.0),
         .front = zm.f32x4(0.0, 0.0, -1.0, 0.0),
-        .smoothness = 8.0,
+        .smoothness = 10.0,
         .speed = 10.0,
         .yaw = -90.0,
         .pitch = 0.0,
@@ -83,16 +92,20 @@ var state: State = .{
         @as(f32, 0xFF) / 255.0,
         @as(f32, 0xFF) / 255.0,
     },
+    .peak_color_threshold = 1.0,
     .noise_frequency = 1.0,
     .noise_amplitude = 0.28,
     .normal_step_size = 0.0001,
+    .noise_function = .Simplex,
+    .num_octaves = 6,
+    .hurst_exponent = 0.9,
 };
 
 fn computeVsParams() shd.VsParams {
     // Rotation matrix
     // const rxm = zm.rotationX(state.rotation_x);
     const dt: f32 = @floatCast(sapp.frameDuration());
-    state.rotation_y += 0.5 * dt;
+    state.rotation_y += 0.25 * dt;
     const rym = zm.rotationY(state.rotation_y);
 
     // Model Matrix
@@ -113,15 +126,23 @@ fn computeVsParams() shd.VsParams {
 
     // Model View Projection Matrix
     const mvp = zm.mul(model, zm.mul(view, proj));
+
+    const noise_function: i32 = @intCast(@intFromEnum(state.noise_function));
+    const num_octaves: i32 = @intCast(state.num_octaves);
+
     return shd.VsParams{
         .mvp = mvp,
         .model_matrix = model,
         .normal_step_size = state.normal_step_size,
         .base_color = state.base_color,
         .peak_color = state.peak_color,
+        .peak_color_threshold = state.peak_color_threshold,
         .noise_frequency = state.noise_frequency,
         .noise_amplitude = state.noise_amplitude,
         .camera_position = camera_position,
+        .noise_function = noise_function,
+        .num_octaves = num_octaves,
+        .hurst_exponent = state.hurst_exponent,
     };
 }
 
@@ -190,7 +211,7 @@ export fn init() void {
         .logger = .{ .func = slog.func },
     });
 
-    state.plane = makePlane(64, 1.0, default_allocator) catch unreachable;
+    state.plane = makePlane(512, 1.0, default_allocator) catch unreachable;
 
     // Initialize imgui
     simgui.setup(.{ .logger = .{ .func = slog.func } });
@@ -244,7 +265,7 @@ export fn frame() void {
     });
 
     const debugPanelWidth = 400.0;
-    const debugPanelHeight = 200.0;
+    const debugPanelHeight = 300.0;
     ig.igSetNextWindowPos(.{ .x = sapp.widthf() - debugPanelWidth - 10, .y = 10 }, ig.ImGuiCond_Once);
     ig.igSetNextWindowSize(.{ .x = debugPanelWidth, .y = debugPanelHeight }, ig.ImGuiCond_Once);
     if (ig.igBegin("Zig Dirt Jam", null, ig.ImGuiWindowFlags_None)) {
@@ -263,9 +284,18 @@ export fn frame() void {
             &state.peak_color,
             ig.ImGuiColorEditFlags_None,
         );
+        _ = ig.igSliderFloatEx("Peak Color Threshold", &state.peak_color_threshold, 0.1, 5.0, "%.3f", ig.ImGuiSliderFlags_None);
         _ = ig.igSliderFloat("Noise Frequency", &state.noise_frequency, 0.0, 5.0);
         _ = ig.igSliderFloat("Noise Amplitude", &state.noise_amplitude, 0.0, 5.0);
         _ = ig.igSliderFloatEx("Normal Step Size", &state.normal_step_size, 0.0, 1.0, "%.6f", ig.ImGuiSliderFlags_None);
+        if (ig.igButton("Simplex Noise")) {
+            state.noise_function = .Simplex;
+        }
+        if (ig.igButton("Turbulence Noise")) {
+            state.noise_function = .Turbulence;
+        }
+        _ = ig.igSliderInt("Num Octaves", &state.num_octaves, 0, 6);
+        _ = ig.igSliderFloatEx("Hurst Exponent", &state.hurst_exponent, 0.0, 1.0, "%.3f", ig.ImGuiSliderFlags_None);
     }
     ig.igEnd();
 
