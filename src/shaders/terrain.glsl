@@ -151,7 +151,7 @@ void main() {
     switch (noise_function) {
         case NOISE_FUNC_TYPE_SIMPLEX:
             displacement = snoise(position.xz * noise_frequency);
-            calculated_normal = normal_snoise(position.xyz, normal_step_size);
+            calculated_normal = normal_snoise(position.xyz * noise_frequency, normal_step_size);
             mix_value = displacement;
             // Simplex noise returns value between -1 and 1 remap to 0 and 1
             mix_value = (displacement * 0.5) + 0.5;
@@ -159,7 +159,7 @@ void main() {
             break;
         case NOISE_FUNC_TYPE_TURBULENCE:
             displacement = turbulence(position.xz * noise_frequency, hurst_exponent, num_octaves);
-            calculated_normal = normal_turbulence(position.xyz, hurst_exponent, num_octaves, normal_step_size);
+            calculated_normal = normal_turbulence(position.xyz * noise_frequency, hurst_exponent, num_octaves, normal_step_size);
             mix_value = displacement;
             mix_color = mix(base_color, peak_color, smoothstep(mix_value, -peak_color_threshold, peak_color_threshold));
             break;
