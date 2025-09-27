@@ -40,7 +40,6 @@ const State = struct {
     plane: Plane,
     mouse_locked: bool,
     camera: Camera,
-    rotation_x: f32,
     rotation_y: f32,
     base_color: [3]f32,
     peak_color: [3]f32,
@@ -80,7 +79,6 @@ var state: State = .{
         .pitch = 0.0,
     },
     .mouse_locked = true,
-    .rotation_x = 0.0,
     .rotation_y = 0.0,
     .base_color = .{
         @as(f32, 0xE0) / 255.0,
@@ -103,7 +101,6 @@ var state: State = .{
 
 fn computeVsParams() shd.VsParams {
     // Rotation matrix
-    // const rxm = zm.rotationX(state.rotation_x);
     const dt: f32 = @floatCast(sapp.frameDuration());
     state.rotation_y += 0.25 * dt;
     const rym = zm.rotationY(state.rotation_y);
@@ -117,12 +114,6 @@ fn computeVsParams() shd.VsParams {
 
     // View Matrix
     const view = zm.lookAtLh(state.camera.position, state.camera.position + state.camera.front, state.camera.up);
-
-    const camera_position: [3]f32 = .{
-        state.camera.position[0],
-        state.camera.position[1],
-        state.camera.position[2],
-    };
 
     // Model View Projection Matrix
     const mvp = zm.mul(model, zm.mul(view, proj));
@@ -139,7 +130,6 @@ fn computeVsParams() shd.VsParams {
         .peak_color_threshold = state.peak_color_threshold,
         .noise_frequency = state.noise_frequency,
         .noise_amplitude = state.noise_amplitude,
-        .camera_position = camera_position,
         .noise_function = noise_function,
         .num_octaves = num_octaves,
         .hurst_exponent = state.hurst_exponent,

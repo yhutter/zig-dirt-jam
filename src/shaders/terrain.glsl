@@ -126,22 +126,21 @@ layout(binding = 0) uniform vs_params {
     vec3 base_color;
     vec3 peak_color;
     float peak_color_threshold;
+
     float noise_frequency;
     float noise_amplitude;
     int noise_function;
     int num_octaves;
     float hurst_exponent;
     float normal_step_size;
+
     mat4 model_matrix;
     mat4 mvp;
-    vec3 camera_position;
 };
 
 layout(location = 0) in vec4 position;
 out vec4 color;
 out vec3 normal;
-out vec3 position_world;
-out vec3 camera;
 
 void main() {
     float displacement = 0.0;
@@ -170,11 +169,7 @@ void main() {
     gl_Position = mvp * displaced_position;
 
     color = vec4(mix_color, 1.0);
-
     normal = (model_matrix * vec4(calculated_normal, 0.0f)).xyz;
-
-    position_world = (model_matrix * displaced_position).xyz;
-    camera = camera_position;
 }
 @end
 
@@ -182,13 +177,10 @@ void main() {
 @fs fs
 in vec4 color;
 in vec3 normal;
-in vec3 position_world;
-in vec3 camera;
 out vec4 frag_color;
 
 void main() {
     vec3 normalized_normal = normalize(normal);
-    vec3 view_direction = normalize(camera - position_world);
 
     vec3 base_colour = color.rgb;
     vec3 lighting = vec3(0.0f);
@@ -205,7 +197,6 @@ void main() {
     dp *= smoothstep(0.5, 0.505, dp);
 
     vec3 diffuse = dp * light_color;
-    // vec3 diffuse = light_color;
 
     // Lighting is sum of all lighting sources.
     lighting = diffuse * 0.8;
