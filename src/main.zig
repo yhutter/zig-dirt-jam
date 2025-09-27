@@ -70,8 +70,8 @@ var state: State = .{
         .position = zm.f32x4s(1.0),
     },
     .camera = .{
-        .position = zm.f32x4(0.0, 0.0, 2.0, 1.0),
-        .target_position = zm.f32x4(0.0, 0.0, 2.0, 1.0),
+        .position = zm.f32x4(0.0, 0.5, 1.5, 1.0),
+        .target_position = zm.f32x4(0.0, 0.5, 1.5, 1.0),
         .up = zm.f32x4(0.0, 1.0, 0.0, 0.0),
         .front = zm.f32x4(0.0, 0.0, -1.0, 0.0),
         .smoothness = 10.0,
@@ -83,20 +83,20 @@ var state: State = .{
     .rotation_x = 0.0,
     .rotation_y = 0.0,
     .base_color = .{
-        @as(f32, 0xF2) / 255.0,
+        @as(f32, 0xE0) / 255.0,
+        @as(f32, 0xDE) / 255.0,
         @as(f32, 0xF4) / 255.0,
-        @as(f32, 0xF8) / 255.0,
     },
     .peak_color = .{
-        @as(f32, 0xFF) / 255.0,
-        @as(f32, 0xFF) / 255.0,
-        @as(f32, 0xFF) / 255.0,
+        @as(f32, 0x19) / 255.0,
+        @as(f32, 0x17) / 255.0,
+        @as(f32, 0x24) / 255.0,
     },
-    .peak_color_threshold = 1.0,
+    .peak_color_threshold = 0.1,
     .noise_frequency = 1.0,
     .noise_amplitude = 0.28,
     .normal_step_size = 0.0001,
-    .noise_function = .Simplex,
+    .noise_function = .Turbulence,
     .num_octaves = 6,
     .hurst_exponent = 0.9,
 };
@@ -220,9 +220,9 @@ export fn init() void {
     state.pass_action.colors[0] = .{
         .load_action = .CLEAR,
         .clear_value = .{
-            .r = @as(f32, 0x16) / 255.0,
-            .g = @as(f32, 0x16) / 255.0,
-            .b = @as(f32, 0x16) / 255.0,
+            .r = @as(f32, 0x19) / 255.0,
+            .g = @as(f32, 0x17) / 255.0,
+            .b = @as(f32, 0x24) / 255.0,
             .a = 1.0,
         },
     };
@@ -243,7 +243,7 @@ export fn init() void {
         .shader = shader,
         .index_type = .UINT32,
         .primitive_type = .TRIANGLES,
-        .cull_mode = .NONE,
+        .cull_mode = .DEFAULT,
         .depth = .{ .compare = .LESS_EQUAL, .write_enabled = true },
         .layout = init: {
             var l = sg.VertexLayoutState{};
